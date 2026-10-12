@@ -1,64 +1,77 @@
+import sys
+from awsglue.transforms import *
+from awsglue.utils import getResolvedOptions
+from pyspark.context import SparkContext
+from awsglue.context import GlueContext
+from awsglue.job import Job
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
-import os
 import json
 
-# 1. Detect if the script is running in AWS Glue
-IS_GLUE = "GLUE_COMMAND_CRITERIA" in os.environ
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
+sc = SparkContext()
+glueContext = GlueContext(sc)
+spark = glueContext.spark_session
+job = Job(glueContext)
+job.init(args['JOB_NAME'], args)
 
-# if IS_GLUE:
-#     # --- AWS GLUE ENVIRONMENT ---
-#     # Glue handles all S3 configurations automatically under the hood
-#     spark = SparkSession.builder \
-#         .appName("GlueReadParquetFromS3") \
-#         .getOrCreate()
-#
-#     # Path to your live production S3 data
-#     path = "s3://your-bucket-name/path/to/data.parquet"
-#
-# else:
-#     # --- LOCAL PYCHARM JUPYTER NOTEBOOK ENVIRONMENT ---
-#     # Simple, lightweight initialization for local machine files
-#     spark = SparkSession.builder \
-#         .appName("OptimizedLocalSession") \
-#         .master("local[*]") \
-#         .config("spark.driver.memory", "4g") \
-#         .config("spark.executor.memory", "4g") \
-#         .getOrCreate()
-#
-# # 2. Universal Read and Show (Works identically on both Local and Glue)
-# BASE_DIR = Path.cwd().parent
-# print(BASE_DIR)
-# for path in Path(f"{BASE_DIR}/yellow_taxi_trip").iterdir():
-#     print(f"Analyzing metadata for file::: " + path.name)
-#     df = spark.read.parquet(path)
-#     month_list = ['Jan', 'Feb', 'Mar']
+# path_list = ["", "", ""]
+path_list = ["s3://nyc-raw-yellow-taxi-trip/raw/trips/year=2023/month=01/yellow_tripdata_2023-01.parquet",
+             "s3://nyc-raw-yellow-taxi-trip/raw/trips/year=2023/month=02/yellow_tripdata_2023-02.parquet",
+             "s3://nyc-raw-yellow-taxi-trip/raw/trips/year=2023/month=03/yellow_tripdata_2023-03.parquet"]
+report_path = "s3://nyc-raw-yellow-taxi-trip/profile_report"
+for path in path_list:
+    df = spark.read.parquet(path)
+    row_count = df.count()
+    print("Row count::: ", df.count())
+    #Numerical Analysis
+    fil_cols = [col for col, dtype in df.dtypes if dtype in ("int", "bigint", "double")]
+    df_stat = df.select(fil_cols).describe()
+    #Finding Null Count
+    df_null_count = df.select([
+        F.count(F.when(F.col(c).isNull(), F.lit(1))).cast("string").alias(c)
+        for c in fil_cols
+    ])
+    df_null_count = df_null_count.withColumn("summary", F.lit("null_count"))
+    df_null_count = df_null_count.select(["summary"] + fil_cols)
+    df_stat = df_stat.union(df_null_count)
+    df_stat.coalesce(1).write.mode("append").option("header", True).csv(f"{report_path}/numerical_analysis")
+    #Categorical Analysis
+    cat_cols = ['payment_type', 'RatecodeID', 'VendorID']
+    df_frequency = None
+    for col in cat_cols:
+        df_frequency_temp = (
+            df.groupBy(F.col(col).alias("category_column"))
+            .count()
+            .withColumn("category_type", F.lit(col))
+        )
+        print("unique::: ", df_frequency_temp.count())
+        if df_frequency is None:
+            df_frequency = df_frequency_temp
+        else:
+            df_frequency = df_frequency.union(df_frequency_temp)
+    df_frequency.coalesce(1).write.mode("append").option("header", True).csv(f"{report_path}/categprical_analysis")
+    #count of trips where dropoff < pickup, trip_distance<=0, or fare_amount <= 0
+    df_inv = df.filter((F.col("fare_amount")<= 0) |
+                       (F.col("trip_distance") <= 0) |
+                       (F.col("tpep_dropoff_datetime")< F.col("tpep_pickup_datetime")))
+    invalid_trip_count = df_inv.count()
+    print("Count of trips with  dropoff is earlier than pickup, trip_distance, fare_amount less than zero::: ", invalid_trip_count)
+    #Exact and approximate duplicate row count
+    exact_duplicate_count = df.count() - df.distinct().count()
+    print("Exact duplicate count::: ", exact_duplicate_count)
+    df_qual = spark.createDataFrame(
+        [(row_count, exact_duplicate_count, invalid_trip_count)],
+        "row_count LONG, exact_duplicate_count LONG, invalid_trip_count LONG"
+    )
+    df_qual.coalesce(1).write.mode("append").option("header", "true").csv(f"{report_path}/quality_analysis")
+    #Schema drift
+    #Airport_fee is the only column not present in Jan, Instead it is present as airport_fee
+    print("Airport_fee is the only column not present in Jan, Instead it is present as airport_fee")
 
-spark = SparkSession.builder \
-        .appName("GlueReadParquetFromS3") \
-        .getOrCreate()
-path = "s3://your-bucket-name/path/to/data.parquet"
-df = spark.read.parquet(path)
-fil_cols = [col for col, dtype in df.dtypes if dtype in ("int", "bigint", "double")]
-# stats = {}
-# cat_stats = {}
-# row_count = df.count()
-# for col in fil_cols:
-#     describe_rows = df.select(col).describe().collect()
-#     stats[col] = {row['summary']: row[col] for row in describe_rows}
-#     stats[col]['null_count'] = str(row_count - int(stats[col]['count']))
-# print('Statistical Analysis::: ', json.dumps(stats, indent= 4))
-df_stat = df.select(fil_cols).describe()
-#Finding Null Count
-df_null_count = df.select([
-    F.count(F.when(F.col(c).isNull(), F.lit(1))).cast("string").alias(c)
-    for c in fil_cols
-])
-df_null_count = df_null_count.withColumn("summary", F.lit("null_count"))
-df_null_count = df_null_count.select(["summary"] + fil_cols)
-df_stat = df_stat.union(df_null_count)
-cat_col = ['payment_type', 'RatecodeID', 'VendorID']
-
-
-
-
+    # Sample 10% (0.1) of the DataFrame
+    sample_fraction = 0.1
+    sampled_count = df.sample(fraction=sample_fraction, seed=42).count()
+    # Scale back up to estimate total rows
+    approx_total_rows = int(sampled_count / sample_fraction)
+    print(f"Approximate row count: {approx_total_rows}")
