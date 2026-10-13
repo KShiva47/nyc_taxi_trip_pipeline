@@ -200,7 +200,7 @@ Rows are considered exact duplicates when all column values match. This count me
 - [x] Written numeric profiling results to an output file.
 - [x] Written categorical frequencies to an output file.
 - [x] Written schema, duplicate, and invalid-trip results to the required profiling output location.
-- [ ] Executed and validated the notebook in AWS Glue.
+- [x] Executed and validated the notebook in AWS Glue.
 - [ ] Confirmed output objects in S3 and reconciled README results against the generated output.
 
 An approximate duplicate method has not yet been selected. No approximate duplicate count is reported here. The current code also does not yet write the profiling DataFrames to CSV or JSON; it calculates or displays results during development.

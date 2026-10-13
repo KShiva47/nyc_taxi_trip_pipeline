@@ -15,7 +15,6 @@ spark = glueContext.spark_session
 job = Job(glueContext)
 job.init(args['JOB_NAME'], args)
 
-# path_list = ["", "", ""]
 path_list = ["s3://nyc-raw-yellow-taxi-trip/raw/trips/year=2023/month=01/yellow_tripdata_2023-01.parquet",
              "s3://nyc-raw-yellow-taxi-trip/raw/trips/year=2023/month=02/yellow_tripdata_2023-02.parquet",
              "s3://nyc-raw-yellow-taxi-trip/raw/trips/year=2023/month=03/yellow_tripdata_2023-03.parquet"]
