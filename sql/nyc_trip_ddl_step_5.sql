@@ -13,7 +13,7 @@ FROM information_schema.schemata
 WHERE schema_name IN ('staging', 'analytics')
 ORDER BY schema_name;
 
-
+--Staging Trip Table
 CREATE TABLE staging.staging_trip_data (
     vendor_id                 SMALLINT,
     tpep_pickup_datetime      TIMESTAMP,
@@ -47,11 +47,13 @@ CREATE TABLE staging.staging_trip_data (
 );
 -- DROP TABLE staging.staging_trip_data;
 
+--Staging Trip Table Copy
 COPY staging.staging_trip_data
 FROM 's3://nyc-raw-yellow-taxi-trip/curated/trips/'
 IAM_ROLE 'arn:aws:iam::635390850465:role/nyc-taxi-space-redshift'
 FORMAT AS PARQUET;
 
+--Staging Borough Daily Revenue Table
 CREATE TABLE staging.staging_borough_daily_revenue (
     pickup_borough VARCHAR(64),
     revenue        DOUBLE PRECISION,
@@ -60,22 +62,26 @@ CREATE TABLE staging.staging_borough_daily_revenue (
 
 -- drop TABLE staging.staging_borough_daily_revenue;
 
+--Staging Borough Daily Revenue Copy
 COPY staging.staging_borough_daily_revenue
 FROM 's3://nyc-raw-yellow-taxi-trip/curated/borough_daily_revenue/'
 IAM_ROLE 'arn:aws:iam::635390850465:role/nyc-taxi-space-redshift'
 FORMAT AS PARQUET;
 
+-- Staging Zone Daily Revenue Table
 CREATE TABLE staging.staging_zone_daily_revenue (
     pickup_zone VARCHAR(256),
     revenue DOUBLE PRECISION,
     rank INTEGER
 );
 
+-- Staging Zone Daily Revenue Copy
 COPY staging.staging_zone_daily_revenue
 FROM 's3://nyc-raw-yellow-taxi-trip/curated/zone_daily_revenue/'
 IAM_ROLE 'arn:aws:iam::635390850465:role/nyc-taxi-space-redshift'
 FORMAT AS PARQUET;
 
+--Analytics Trips Table
 CREATE TABLE analytics.trips AS
 SELECT
     vendor_id,
@@ -112,7 +118,7 @@ SELECT
     is_airport_trip
 FROM staging.staging_trip_data;
 
-
+-- Analytics Borough Daily Revenue Table
 CREATE TABLE analytics.borough_daily_revenue AS
 SELECT
     pickup_borough,
@@ -120,7 +126,7 @@ SELECT
     trip_count
 FROM staging.staging_borough_daily_revenue;
 
-
+-- Analytics Zone Daily Revenue Copy
 CREATE TABLE analytics.zone_daily_revenue AS
 SELECT
     pickup_zone,

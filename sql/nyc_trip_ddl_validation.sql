@@ -1,3 +1,4 @@
+--Staging Trip Table count
 select count(*) from staging.staging_trip_data as trp; --9176860
 
 select rate_code_id,count(*) from staging.staging_trip_data as trp group by trp.rate_code_id;
@@ -24,7 +25,7 @@ WHERE query_id >= 1210836
 ORDER BY start_time DESC
 LIMIT 10;
 
-
+--Visual validation of Analytics trips
 select * from analytics.trips limit 10;
 
 SELECT
@@ -34,14 +35,19 @@ FROM staging.staging_zone_lookup
 GROUP BY location_id
 HAVING COUNT(*) > 1;
 
+-- staging.staging_borough_daily_revenue count
 select count(*) from staging.staging_borough_daily_revenue; --704
 
+-- Visual validation of staging_borough_daily_revenue
 select * from staging.staging_borough_daily_revenue;
 
+-- Visual validation of borough_daily_revenue
 select * from analytics.borough_daily_revenue;
 
+--borough_daily_revenue count
 select count(*) from analytics.borough_daily_revenue; -- 704
 
+-- borough based validation
 with daily_revenue as (SELECT
     CAST(tpep_pickup_datetime AS DATE) AS pickup_date,
     pickup_borough,
@@ -68,7 +74,6 @@ SELECT
     COUNT(*) AS total_trips
 FROM analytics.trips;
 
-
 SELECT
     SUM(revenue) AS total_revenue,
     SUM(trip_count) AS total_trips
@@ -81,7 +86,6 @@ FROM staging.staging_zone_daily_revenue; --19192
 
 SELECT COUNT(*)
 FROM analytics.zone_daily_revenue; --19192
-
 
 SELECT
     COUNT(*) AS row_count,
